@@ -1,0 +1,607 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Raspberry TV - لوحة الإدارة</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./config.js"></script>
+
+  <style>
+    :root {
+      --bg: #0b0b0b;
+      --panel: #171717;
+      --gold: #e4b64b;
+      --text: #f7f2e7;
+      --muted: #b7b0a2;
+      --border: #353535;
+      --red: #e05252;
+      --green: #37b878;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, sans-serif;
+      padding: 18px;
+    }
+
+    .container {
+      max-width: 1150px;
+      margin: auto;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+
+    h1, h2 { color: var(--gold); }
+    h1 { font-size: 25px; margin: 0; }
+    h2 { font-size: 19px; }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 18px;
+    }
+
+    .login {
+      max-width: 430px;
+      margin: 55px auto;
+    }
+
+    label {
+      display: block;
+      color: var(--muted);
+      margin: 12px 0 6px;
+    }
+
+    input, select, button {
+      font: inherit;
+      border-radius: 8px;
+      padding: 11px;
+    }
+
+    input, select {
+      background: #101010;
+      border: 1px solid #444;
+      color: var(--text);
+      width: 100%;
+      min-width: 0;
+    }
+
+    button {
+      border: 0;
+      background: var(--gold);
+      color: #17120a;
+      font-weight: bold;
+      cursor: pointer;
+      margin: 3px;
+    }
+
+    button.secondary {
+      background: #333;
+      color: white;
+    }
+
+    button.danger {
+      background: var(--red);
+      color: white;
+    }
+
+    button.success {
+      background: var(--green);
+      color: #07170e;
+    }
+
+    button:disabled {
+      opacity: .5;
+      cursor: wait;
+    }
+
+    .full { width: 100%; margin: 14px 0 0; }
+    .muted { color: var(--muted); }
+    .message { margin-top: 14px; white-space: pre-wrap; }
+    .error { color: #ff7777; }
+    .good { color: #70e0a4; }
+    .hidden { display: none !important; }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .toolbar input { flex: 1; min-width: 180px; }
+
+    .table-wrap {
+      overflow-x: auto;
+      width: 100%;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 850px;
+    }
+
+    th, td {
+      padding: 12px 10px;
+      text-align: right;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th { color: var(--gold); }
+    td small { color: var(--muted); display: block; margin-top: 5px; }
+    .actions { min-width: 180px; }
+    .actions button { margin: 3px 0; }
+    .status { font-weight: bold; }
+    .status-active { color: #70e0a4; }
+    .status-trial { color: var(--gold); }
+    .status-expired, .status-blocked { color: #ff7777; }
+
+    .edit-box {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 10px;
+      align-items: end;
+      margin-top: 12px;
+    }
+
+    .edit-box label { margin-top: 0; }
+    .edit-box button { min-height: 42px; }
+
+    @media (max-width: 600px) {
+      body { padding: 10px; }
+      .panel { padding: 13px; }
+      h1 { font-size: 21px; }
+    }
+  </style>
+</head>
+
+<body>
+<div class="container">
+
+  <header>
+    <h1>🍓 Raspberry TV | لوحة الإدارة</h1>
+    <button id="logoutBtn" class="secondary hidden" onclick="logout()">
+      تسجيل الخروج
+    </button>
+  </header>
+
+  <section id="loginPanel" class="panel login">
+    <h2>تسجيل دخول الإدارة</h2>
+    <p class="muted">سجّل الدخول بحساب الإدارة المسجل في Supabase.</p>
+
+    <form id="loginForm">
+      <label for="email">البريد الإلكتروني</label>
+      <input id="email" type="email" autocomplete="username"
+             required placeholder="admin@example.com">
+
+      <label for="password">كلمة المرور</label>
+      <input id="password" type="password"
+             autocomplete="current-password" required>
+
+      <button id="loginBtn" class="full" type="submit">تسجيل الدخول</button>
+    </form>
+
+    <div id="loginMessage" class="message" role="status"></div>
+  </section>
+
+  <main id="dashboard" class="hidden">
+    <section class="panel">
+      <h2>إدارة الأجهزة والاشتراكات</h2>
+      <p class="muted">
+        يمكنك البحث عن جهاز، تعديل تاريخ الانتهاء، إضافة ملاحظة،
+        تجديد الاشتراك أو تغيير حالة الجهاز.
+      </p>
+
+      <div class="toolbar">
+        <input id="search" type="search"
+          placeholder="ابحث بالاسم أو Device ID أو DUID أو PIN..."
+          aria-label="البحث عن جهاز">
+        <button onclick="loadDevices()">تحديث القائمة</button>
+      </div>
+
+      <div id="tableMessage" class="message" role="status"></div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>الجهاز</th>
+              <th>PIN</th>
+              <th>الحالة</th>
+              <th>تاريخ الانتهاء</th>
+              <th>الملاحظات</th>
+              <th>الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="devicesBody">
+            <tr><td colspan="6">سجّل الدخول لعرض الأجهزة.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = id => document.getElementById(id);
+
+  let supabaseClient = null;
+  let devices = [];
+  let busy = false;
+
+  function message(id, text, isError = false) {
+    const el = $(id);
+    el.textContent = text || "";
+    el.className = "message" + (text ? (isError ? " error" : " good") : "");
+  }
+
+  function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"']/g, char => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    })[char]);
+  }
+
+  function localDate(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    return date.toLocaleString("ar-EG");
+  }
+
+  function dateInputValue(value) {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    return [
+      d.getFullYear(),
+      String(d.getMonth() + 1).padStart(2, "0"),
+      String(d.getDate()).padStart(2, "0")
+    ].join("-") + "T" + [
+      String(d.getHours()).padStart(2, "0"),
+      String(d.getMinutes()).padStart(2, "0")
+    ].join(":");
+  }
+
+  function statusLabel(status) {
+    return ({
+      active: "نشط",
+      trial: "تجريبي",
+      expired: "منتهي",
+      blocked: "محظور"
+    })[status] || status || "غير معروف";
+  }
+
+  function showDashboard(show) {
+    $("loginPanel").classList.toggle("hidden", show);
+    $("dashboard").classList.toggle("hidden", !show);
+    $("logoutBtn").classList.toggle("hidden", !show);
+  }
+
+  function getError(error) {
+    const text = error?.message || "حدث خطأ غير معروف.";
+    if (/invalid login credentials/i.test(text)) {
+      return "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
+    }
+    if (/email not confirmed/i.test(text)) {
+      return "يجب تأكيد البريد الإلكتروني للحساب من Supabase.";
+    }
+    if (/invalid api key/i.test(text)) {
+      return "مفتاح Supabase غير صحيح. راجع config.js.";
+    }
+    if (/row-level security|permission denied|not allowed/i.test(text)) {
+      return "لا توجد صلاحية كافية للعملية. راجع سياسات RLS في Supabase.";
+    }
+    return text;
+  }
+
+  async function requireSession() {
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (error) throw error;
+    return data.session;
+  }
+
+  async function login(event) {
+    event.preventDefault();
+    if (busy) return;
+
+    if (!supabaseClient) {
+      message("loginMessage",
+        "تعذر إعداد Supabase. تأكد من وجود config.js وصحة بياناته.", true);
+      return;
+    }
+
+    busy = true;
+    $("loginBtn").disabled = true;
+    message("loginMessage", "جارٍ تسجيل الدخول...");
+
+    try {
+      const email = $("email").value.trim();
+      const password = $("password").value;
+
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) throw error;
+      if (!data.session) throw new Error("لم يتم إنشاء جلسة دخول.");
+
+      showDashboard(true);
+      message("loginMessage", "");
+      await loadDevices();
+    } catch (error) {
+      showDashboard(false);
+      message("loginMessage", getError(error), true);
+    } finally {
+      busy = false;
+      $("loginBtn").disabled = false;
+    }
+  }
+
+  async function logout() {
+    if (!supabaseClient) return;
+    const { error } = await supabaseClient.auth.signOut();
+    if (error) {
+      alert(getError(error));
+      return;
+    }
+    devices = [];
+    showDashboard(false);
+    $("devicesBody").innerHTML = "";
+    message("loginMessage", "تم تسجيل الخروج.");
+  }
+
+  async function loadDevices() {
+    if (!supabaseClient) return;
+
+    message("tableMessage", "جارٍ تحميل الأجهزة...");
+
+    try {
+      const session = await requireSession();
+      if (!session) {
+        showDashboard(false);
+        message("loginMessage", "انتهت جلسة الدخول. سجّل الدخول مرة أخرى.", true);
+        return;
+      }
+
+      const { data, error } = await supabaseClient
+        .from("devices")
+        .select("id,duid,device_id,pin,status,plan,expiry,playlist_days,note,created_at")
+        .order("created_at", { ascending: false })
+        .limit(1000);
+
+      if (error) throw error;
+
+      devices = data || [];
+      renderDevices();
+      message("tableMessage", "عدد الأجهزة المعروضة: " + devices.length);
+    } catch (error) {
+      message("tableMessage", getError(error), true);
+    }
+  }
+
+  function renderDevices() {
+    const query = $("search").value.trim().toLowerCase();
+
+    const filtered = devices.filter(device => [
+      device.duid, device.device_id, device.pin,
+      device.status, device.plan, device.note
+    ].some(value => String(value ?? "").toLowerCase().includes(query)));
+
+    if (!filtered.length) {
+      $("devicesBody").innerHTML =
+        '<tr><td colspan="6">لا توجد أجهزة مطابقة.</td></tr>';
+      return;
+    }
+
+    $("devicesBody").innerHTML = filtered.map(device => {
+      const id = Number(device.id);
+      const status = String(device.status || "");
+      const safeStatusClass = ["active", "trial", "expired", "blocked"].includes(status)
+        ? status : "";
+
+      return `
+        <tr>
+          <td>
+            <strong>${escapeHTML(device.device_id || "—")}</strong>
+            <small>DUID: ${escapeHTML(device.duid || "—")}</small>
+            <small>الخطة: ${escapeHTML(device.plan || "—")}</small>
+          </td>
+          <td>${escapeHTML(device.pin || "—")}</td>
+          <td><span class="status status-${safeStatusClass}">
+            ${escapeHTML(statusLabel(status))}
+          </span></td>
+          <td>${escapeHTML(localDate(device.expiry))}</td>
+          <td>${escapeHTML(device.note || "—")}</td>
+          <td class="actions">
+            <button onclick="renewDevice(${id},30)">تجديد 30 يومًا</button>
+            <button onclick="renewDevice(${id},365)">تجديد سنة</button>
+            <button class="secondary" onclick="editDevice(${id})">تعديل التاريخ والملاحظة</button>
+            <button class="${status === "blocked" ? "success" : "secondary"}"
+              onclick="toggleBlock(${id})">
+              ${status === "blocked" ? "فك الحظر" : "حظر الجهاز"}
+            </button>
+            <button class="danger" onclick="deleteDevice(${id})">حذف الجهاز</button>
+          </td>
+        </tr>`;
+    }).join("");
+  }
+
+  async function updateDevice(id, changes) {
+    const { error } = await supabaseClient
+      .from("devices")
+      .update(changes)
+      .eq("id", id);
+
+    if (error) throw error;
+  }
+
+  async function renewDevice(id, days) {
+    const device = devices.find(item => Number(item.id) === id);
+    if (!device) return;
+
+    const oldExpiry = new Date(device.expiry);
+    const base = oldExpiry > new Date() ? oldExpiry : new Date();
+    base.setDate(base.getDate() + days);
+
+    if (!confirm("تجديد الاشتراك لمدة " + days + " يومًا للجهاز " +
+        (device.device_id || id) + "؟")) return;
+
+    try {
+      message("tableMessage", "جارٍ تجديد الاشتراك...");
+      await updateDevice(id, {
+        expiry: base.toISOString(),
+        status: "active",
+        plan: days === 365 ? "yearly" : "monthly"
+      });
+      await loadDevices();
+      message("tableMessage", "تم تحديث الاشتراك.");
+    } catch (error) {
+      message("tableMessage", getError(error), true);
+    }
+  }
+
+  async function editDevice(id) {
+    const device = devices.find(item => Number(item.id) === id);
+    if (!device) return;
+
+    const date = prompt(
+      "اكتب تاريخ الانتهاء بصيغة YYYY-MM-DDTHH:mm",
+      dateInputValue(device.expiry)
+    );
+    if (date === null) return;
+
+    const parsedDate = new Date(date);
+    if (!date.trim() || Number.isNaN(parsedDate.getTime())) {
+      alert("صيغة التاريخ غير صحيحة.");
+      return;
+    }
+
+    const note = prompt("اكتب ملاحظة الجهاز:", device.note || "");
+    if (note === null) return;
+
+    try {
+      await updateDevice(id, {
+        expiry: parsedDate.toISOString(),
+        note: note.trim(),
+        status: parsedDate > new Date()
+          ? (device.status === "blocked" ? "blocked" : "active")
+          : "expired"
+      });
+      await loadDevices();
+      message("tableMessage", "تم حفظ التاريخ والملاحظة.");
+    } catch (error) {
+      message("tableMessage", getError(error), true);
+    }
+  }
+
+  async function toggleBlock(id) {
+    const device = devices.find(item => Number(item.id) === id);
+    if (!device) return;
+
+    const block = device.status !== "blocked";
+    if (!confirm(block ? "هل تريد حظر هذا الجهاز؟" : "هل تريد فك حظر الجهاز؟")) return;
+
+    try {
+      await updateDevice(id, {
+        status: block ? "blocked" :
+          (new Date(device.expiry) > new Date() ? "active" : "expired")
+      });
+      await loadDevices();
+      message("tableMessage", block ? "تم حظر الجهاز." : "تم فك الحظر.");
+    } catch (error) {
+      message("tableMessage", getError(error), true);
+    }
+  }
+
+  async function deleteDevice(id) {
+    const device = devices.find(item => Number(item.id) === id);
+    if (!device) return;
+
+    if (!confirm("تحذير: حذف الجهاز نهائيًا من قاعدة البيانات. هل تريد المتابعة؟")) {
+      return;
+    }
+
+    try {
+      const { error } = await supabaseClient
+        .from("devices")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+      await loadDevices();
+      message("tableMessage", "تم حذف الجهاز.");
+    } catch (error) {
+      message("tableMessage", getError(error), true);
+    }
+  }
+
+  async function init() {
+    if (typeof window.supabase === "undefined" ||
+        typeof SUPABASE_URL === "undefined" ||
+        typeof SUPABASE_ANON_KEY === "undefined" ||
+        !SUPABASE_URL.startsWith("https://") ||
+        !SUPABASE_ANON_KEY.startsWith("sb_publishable_")) {
+      message("loginMessage",
+        "تعذر إعداد Supabase. تأكد من تحميل config.js ومن صحة رابط المشروع ومفتاح Publishable.", true);
+      return;
+    }
+
+    supabaseClient = window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY
+    );
+
+    try {
+      const session = await requireSession();
+      if (session) {
+        showDashboard(true);
+        await loadDevices();
+      }
+    } catch (error) {
+      message("loginMessage", getError(error), true);
+    }
+  }
+
+  $("loginForm").addEventListener("submit", login);
+  $("search").addEventListener("input", renderDevices);
+
+  window.logout = logout;
+  window.loadDevices = loadDevices;
+  window.renewDevice = renewDevice;
+  window.editDevice = editDevice;
+  window.toggleBlock = toggleBlock;
+  window.deleteDevice = deleteDevice;
+
+  init();
+})();
+</script>
+</body>
+</html>
